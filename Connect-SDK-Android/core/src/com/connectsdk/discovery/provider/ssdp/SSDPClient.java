@@ -20,6 +20,14 @@
 
 package com.connectsdk.discovery.provider.ssdp;
 
+import android.os.Handler;
+import android.os.HandlerThread;
+import android.text.TextUtils;
+import android.util.Log;
+
+import com.connectsdk.BuildConfig;
+import com.connectsdk.core.Util;
+
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -43,12 +51,12 @@ public class SSDPClient {
     public static final String OK = "HTTP/1.1 200 OK";
 
     /* Definitions of search targets */
-//    public static final String DEVICE_MEDIA_SERVER_1 = "urn:schemas-upnp-org:device:MediaServer:1"; 
+//    public static final String DEVICE_MEDIA_SERVER_1 = "urn:schemas-upnp-org:device:MediaServer:1";
 
 //    public static final String SERVICE_CONTENT_DIRECTORY_1 = "urn:schemas-upnp-org:service:ContentDirectory:1";
 //    public static final String SERVICE_CONNECTION_MANAGER_1 = "urn:schemas-upnp-org:service:ConnectionManager:1";
 //    public static final String SERVICE_AV_TRANSPORT_1 = "urn:schemas-upnp-org:service:AVTransport:1";
-//    
+//
 //    public static final String ST_ContentDirectory = ST + ":" + UPNP.SERVICE_CONTENT_DIRECTORY_1;
 
     /* Definitions of notification sub type */
@@ -66,6 +74,11 @@ public class SSDPClient {
     int timeout = 0;
     static int MX = 5;
 
+    private static HandlerThread HANDLER = new HandlerThread("join_thread");
+    static {
+        HANDLER.start();
+    }
+
     public SSDPClient(InetAddress source) throws IOException {
         this(source, new MulticastSocket(PORT), new DatagramSocket(null));
     }
@@ -77,8 +90,27 @@ public class SSDPClient {
 
         multicastGroup = new InetSocketAddress(MULTICAST_ADDRESS, PORT);
         networkInterface = NetworkInterface.getByInetAddress(localInAddress);
-        multicastSocket.joinGroup(multicastGroup, networkInterface);
+        joinGroup();
+        bind();
+    }
 
+    private void joinGroup() {
+        Handler joinHandler = new Handler(HANDLER.getLooper());
+        joinHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    multicastSocket.joinGroup(multicastGroup, networkInterface);
+                } catch (IOException e) {
+                    if (BuildConfig.DEBUG && !TextUtils.isEmpty(e.getMessage())) {
+                        Log.i(Util.T, e.getMessage());
+                    }
+                }
+            }
+        });
+    }
+
+    private void bind() throws SocketException {
         datagramSocket.setReuseAddress(true);
         datagramSocket.bind(new InetSocketAddress(localInAddress, 0));
     }
@@ -113,7 +145,7 @@ public class SSDPClient {
 
 //    /** Starts the socket */
 //    public void start() {
-//    
+//
 //    }
 
     public boolean isConnected() {
